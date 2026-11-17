@@ -1,14 +1,14 @@
 {
   "manifest_version": 1,
-  "version": "0.1.3",
+  "version": "0.2.0",
   "type": "APP",
   "name": {
-    "ja": "Oxi 帳票（試作）",
-    "en": "Oxi reports (prototype)"
+    "ja": "Oxi 帳票",
+    "en": "Oxi reports"
   },
   "description": {
-    "ja": "Word のひな形に {{項目名}} を書くだけで、レコードの内容から帳票の PDF を作ります。添付の Word ファイルを PDF で表示することもできます。変換はブラウザの中で行い、ファイルもデータも外部に送りません。",
-    "en": "Fills Word templates with {{field}} placeholders from the record and makes a PDF; also shows attached Word files as PDF. Everything happens inside the browser; nothing is sent anywhere."
+    "ja": "Word や Excel のひな形に {{項目名}} を書くだけで、レコードから帳票の PDF を作ります。変換はブラウザの中で行い、データを外部に送りません。",
+    "en": "Fills Word and Excel templates with {{field}} placeholders from the record and makes a PDF, inside the browser; no data leaves it."
   },
   "icon": "image/icon.png",
   "homepage_url": {

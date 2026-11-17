@@ -1,5 +1,8 @@
 # Build 請求書ひな形.xlsx: a typical Japanese invoice sheet with {{placeholders}},
 # fixed detail rows, number formats and SUM formulas.
+# openpyxl stores no formula results; open and save the file once in Excel or
+# LibreOffice (soffice --headless --convert-to xlsx) before using it, as a
+# template saved by Excel always carries them.
 import sys
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, Side
