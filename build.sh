@@ -4,13 +4,14 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 ver=${1:?engine version, e.g. 0.9.0}
-part() { grep -v '^// SPDX' "$1" | sed 's/^export //'; }
+part() { grep -v -e '^// SPDX' -e '^import ' "$1" | sed 's/^export //'; }
 {
   echo '// SPDX-License-Identifier: MIT OR Apache-2.0'
   echo '// Built by build.sh from lib/. Do not edit by hand.'
   echo '(function () {'
   echo "'use strict';"
   part "$here/lib/oxi-fill.js"
+  part "$here/lib/oxi-fill-xlsx.js"
   part "$here/lib/config-store.js"
   part "$here/lib/plugin-main.js" | sed "s/__ENGINE_VERSION__/$ver/"
   echo '})();'

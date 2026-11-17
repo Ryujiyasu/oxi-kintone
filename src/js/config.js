@@ -4,7 +4,7 @@
 'use strict';
 // Plugin settings layout (kintone keeps settings as string values, at most
 // 65,535 characters each and 256 KB in total):
-//   templates: JSON [{ name, parts, size }]
+//   templates: JSON [{ name, kind, parts, size }], kind 'docx' or 'xlsx'
 //   tpl_<i>_<j>: base64 chunk j of template i
 //   output_field: attachment field code that receives generated PDFs ('' = none)
 var CHUNK = 60000;
@@ -30,7 +30,7 @@ function readTemplates(config) {
   return list.map(function (t, i) {
     var b64 = '';
     for (var j = 0; j < t.parts; j++) b64 += config['tpl_' + i + '_' + j] || '';
-    return { name: t.name, bytes: base64ToBytes(b64) };
+    return { name: t.name, kind: t.kind || 'docx', bytes: base64ToBytes(b64) };
   });
 }
 
@@ -40,7 +40,7 @@ function writeTemplates(templates, outputField) {
   templates.forEach(function (t, i) {
     var b64 = bytesToBase64(t.bytes), parts = 0;
     for (var o = 0; o < b64.length; o += CHUNK) config['tpl_' + i + '_' + parts++] = b64.slice(o, o + CHUNK);
-    meta.push({ name: t.name, parts: parts, size: t.bytes.length });
+    meta.push({ name: t.name, kind: t.kind || 'docx', parts: parts, size: t.bytes.length });
   });
   config.templates = JSON.stringify(meta);
   return config;
@@ -85,11 +85,12 @@ root.querySelector('.oxi-add').onclick = function () {
   errorBox.textContent = '';
   var input = root.querySelector('.oxi-new-file');
   var file = input.files && input.files[0];
-  if (!file) { errorBox.textContent = 'ひな形の Word ファイル（.docx）を選んでください。'; return; }
-  if (!/\.docx$/i.test(file.name)) { errorBox.textContent = '.docx ファイルを選んでください。'; return; }
-  var name = root.querySelector('.oxi-new-name').value.trim() || file.name.replace(/\.docx$/i, '');
+  if (!file) { errorBox.textContent = 'ひな形の Word（.docx）か Excel（.xlsx）のファイルを選んでください。'; return; }
+  var ext = (file.name.match(/\.(docx|xlsx)$/i) || [])[1];
+  if (!ext) { errorBox.textContent = '.docx か .xlsx のファイルを選んでください。'; return; }
+  var name = root.querySelector('.oxi-new-name').value.trim() || file.name.replace(/\.(docx|xlsx)$/i, '');
   file.arrayBuffer().then(function (buf) {
-    var next = templates.concat([{ name: name, bytes: new Uint8Array(buf) }]);
+    var next = templates.concat([{ name: name, kind: ext.toLowerCase(), bytes: new Uint8Array(buf) }]);
     if (configBytes(writeTemplates(next, root.querySelector('.oxi-output').value)) > LIMIT) {
       errorBox.textContent = 'このひな形を加えると、設定の上限（256 KB）を超えます。画像を小さくするか、ほかのひな形を削除してください。';
       return;

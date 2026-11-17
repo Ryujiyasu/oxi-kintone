@@ -1,8 +1,8 @@
 <section class="oxi-config" style="padding:16px 0;max-width:720px">
-  <h3 style="margin:0 0 8px">帳票のひな形（Word）</h3>
+  <h3 style="margin:0 0 8px">帳票のひな形（Word / Excel）</h3>
   <p style="margin:0 0 12px;color:#555">
-    Word のひな形に <code>{{顧客名}}</code> のように項目名（またはフィールドコード）を書くと、レコードの値に置き換わります。
-    テーブルの行は <code>{{テーブル名.項目名}}</code> と書くと、レコードの行数だけ繰り返されます。
+    Word や Excel のひな形に <code>{{顧客名}}</code> のように項目名（またはフィールドコード）を書くと、レコードの値に置き換わります。
+    明細の行は <code>{{テーブル名.項目名}}</code> と書くと、テーブルの行がその行から下へ順に入ります。
   </p>
   <table class="oxi-templates" style="border-collapse:collapse;margin-bottom:12px;min-width:420px">
     <thead><tr><th style="text-align:left;padding:4px 8px">名前</th><th style="text-align:right;padding:4px 8px">大きさ</th><th></th></tr></thead>
@@ -10,7 +10,7 @@
   </table>
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px">
     <input type="text" class="oxi-new-name" placeholder="名前（例: 見積書）" style="padding:4px">
-    <input type="file" class="oxi-new-file" accept=".docx">
+    <input type="file" class="oxi-new-file" accept=".docx,.xlsx">
     <button type="button" class="oxi-add">追加</button>
   </div>
   <h3 style="margin:0 0 8px">できた PDF の保存先</h3>

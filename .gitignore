@@ -9,3 +9,5 @@ test/forms/*.docx
 test/mock3/desktop.js
 test/mock3/config.js
 test/mock3/config.html
+test/mock3/engine-x
+test/xlsx/out*

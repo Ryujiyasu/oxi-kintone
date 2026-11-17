@@ -263,9 +263,170 @@ function kintoneRecordData(record) {
   }
   return data;
 }
+
+/**
+ * Like kintoneRecordData, but numbers stay numbers, so a spreadsheet cell
+ * that is just {{金額}} gets a number and the template's number format.
+ */
+function kintoneRecordValues(record) {
+  const text = kintoneRecordData(record);
+  const typed = (field, value) => {
+    if (field && (field.type === 'NUMBER' || field.type === 'CALC') && field.value !== '' && field.value != null) {
+      const n = Number(field.value);
+      if (Number.isFinite(n)) return n;
+    }
+    return value;
+  };
+  const data = {};
+  for (const [code, field] of Object.entries(record)) {
+    if (!(code in text)) continue;
+    if (field.type === 'SUBTABLE') {
+      data[code] = field.value.map((row, i) => {
+        const entry = {};
+        for (const [c, f] of Object.entries(row.value)) entry[c] = typed(f, text[code][i][c]);
+        return entry;
+      });
+    } else {
+      data[code] = typed(field, text[code]);
+    }
+  }
+  return data;
+}
+// Fill an Excel template with data, working on the workbook the Oxi engine
+// parses (parse_spreadsheet), then recalculate and write it back.
+//
+// The placeholders are the Word template's: {{name}}, {{list.field}} in a
+// row of a list, {{name[-1]}} for one character per cell, {{name:和暦}}.
+// A cell that is nothing but one placeholder takes the value as it is, so a
+// number stays a number and the cell's number format (#,##0, ¥…) applies;
+// placeholders inside longer text are replaced as text.
+//
+// A row naming {{list.field}} is the first line of the list: entry k goes
+// into the row k below it, in the same columns. Rows are not inserted, since
+// that would move every formula, merge and print area under them; the
+// template provides as many lines as the form prints. Entries beyond the
+// last free line are reported, not written over what is below.
+
+const xlText = (cell) => (cell && cell.value && typeof cell.value === 'object' && typeof cell.value.String === 'string' ? cell.value.String : null);
+const xlEmpty = (cell) => !cell || cell.value === 'Empty' || (xlText(cell) === '' && !cell.formula);
+
+/** The value for `name` from `scope`: a number or a string, undefined when absent. */
+function xlResolve(scope, name) {
+  const [, field, format, index] = name.match(NAME);
+  const v = scope[field];
+  if (v === undefined || Array.isArray(v)) return undefined;
+  if (format) return formatValue(v, format);
+  if (index !== undefined) return pick(typeof v === 'number' ? String(v) : String(v), Number(index));
+  return v;
+}
+
+const xlAsText = (v) => (typeof v === 'number' ? v.toLocaleString('ja-JP') : String(v));
+
+/** Set a cell from its template text; returns the names not found. */
+function xlFillCell(cell, template, lookup, missing) {
+  const whole = template.match(/^\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/);
+  if (whole) {
+    const v = lookup(whole[1]);
+    if (v === undefined) { missing.add(baseName(whole[1])); cell.value = { String: template }; return; }
+    if (typeof v === 'number') cell.value = { Number: v };
+    else cell.value = v === '' ? 'Empty' : { String: v };
+    return;
+  }
+  cell.value = {
+    String: template.replace(PLACEHOLDER, (m, name) => {
+      const v = lookup(name);
+      if (v === undefined) { missing.add(baseName(name)); return m; }
+      return xlAsText(v);
+    }),
+  };
+}
+
+function xlRowAt(sheet, index) {
+  let row = sheet.rows.find((r) => r.index === index);
+  if (!row) {
+    row = { cells: [], height: null, index };
+    sheet.rows.push(row);
+    sheet.rows.sort((a, b) => a.index - b.index);
+  }
+  return row;
+}
+
+function xlCellAt(row, col, style) {
+  let cell = row.cells.find((c) => c.col === col);
+  if (!cell) {
+    cell = { col, style: structuredClone(style), value: 'Empty' };
+    row.cells.push(cell);
+    row.cells.sort((a, b) => a.col - b.col);
+  }
+  return cell;
+}
+
+/**
+ * Fill `workbook` (the object parse_spreadsheet returns) with `data`, in
+ * place. Returns { missing, overflow }: names the template uses that `data`
+ * lacks, and for each list that did not fit, how many entries were left out.
+ */
+function fillWorkbook(workbook, data) {
+  const missing = new Set();
+  const overflow = {};
+  const lookup = (name) => xlResolve(data, name);
+  for (const sheet of workbook.sheets) {
+    const listRows = [];
+    for (const row of sheet.rows) {
+      for (const cell of row.cells) {
+        const t = xlText(cell);
+        if (t === null) continue;
+        for (const m of t.matchAll(PLACEHOLDER)) {
+          const dot = m[1].indexOf('.');
+          const list = dot > 0 ? m[1].slice(0, dot) : null;
+          if (list && Array.isArray(data[list]) && !listRows.some((l) => l.row === row)) listRows.push({ row, list });
+        }
+      }
+    }
+    for (const { row, list } of listRows) {
+      const templates = row.cells.filter((c) => xlText(c) !== null && xlText(c).includes('{{'))
+        .map((c) => ({ col: c.col, style: c.style, text: xlText(c) }));
+      const cols = templates.map((t) => t.col);
+      const entries = data[list];
+      let written = 0;
+      for (let k = 0; k < Math.max(entries.length, 1); k++) {
+        const target = k === 0 ? row : xlRowAt(sheet, row.index + k);
+        if (k > 0 && !cols.every((col) => xlEmpty(target.cells.find((c) => c.col === col)))) break;
+        const entry = entries[k];
+        for (const t of templates) {
+          const cell = xlCellAt(target, t.col, t.style);
+          if (!entry) { cell.value = 'Empty'; continue; }
+          xlFillCell(cell, t.text, (name) => (name.startsWith(list + '.') ? xlResolve(entry, name.slice(list.length + 1)) : lookup(name)), missing);
+        }
+        if (entry) written++;
+      }
+      if (written < entries.length) overflow[list] = entries.length - written;
+    }
+    for (const row of sheet.rows) {
+      for (const cell of row.cells) {
+        const t = xlText(cell);
+        if (t !== null && t.includes('{{')) xlFillCell(cell, t, lookup, missing);
+      }
+    }
+  }
+  return { missing: [...missing], overflow };
+}
+
+/**
+ * Fill an .xlsx template and return the filled workbook's bytes, with every
+ * formula recalculated so totals follow the new values. `api` is the
+ * initialised Oxi wasm module (suite build).
+ */
+function fillXlsx(api, templateBytes, data) {
+  const workbook = api.parse_spreadsheet(templateBytes);
+  const { missing, overflow } = fillWorkbook(workbook, data);
+  const recalculated = api.recalculate_spreadsheet(workbook, Date.now());
+  const xlsx = api.edit_xlsx_from_workbook(templateBytes, recalculated);
+  return { xlsx, missing, overflow };
+}
 // Plugin settings layout (kintone keeps settings as string values, at most
 // 65,535 characters each and 256 KB in total):
-//   templates: JSON [{ name, parts, size }]
+//   templates: JSON [{ name, kind, parts, size }], kind 'docx' or 'xlsx'
 //   tpl_<i>_<j>: base64 chunk j of template i
 //   output_field: attachment field code that receives generated PDFs ('' = none)
 var CHUNK = 60000;
@@ -291,7 +452,7 @@ function readTemplates(config) {
   return list.map(function (t, i) {
     var b64 = '';
     for (var j = 0; j < t.parts; j++) b64 += config['tpl_' + i + '_' + j] || '';
-    return { name: t.name, bytes: base64ToBytes(b64) };
+    return { name: t.name, kind: t.kind || 'docx', bytes: base64ToBytes(b64) };
   });
 }
 
@@ -301,7 +462,7 @@ function writeTemplates(templates, outputField) {
   templates.forEach(function (t, i) {
     var b64 = bytesToBase64(t.bytes), parts = 0;
     for (var o = 0; o < b64.length; o += CHUNK) config['tpl_' + i + '_' + parts++] = b64.slice(o, o + CHUNK);
-    meta.push({ name: t.name, parts: parts, size: t.bytes.length });
+    meta.push({ name: t.name, kind: t.kind || 'docx', parts: parts, size: t.bytes.length });
   });
   config.templates = JSON.stringify(meta);
   return config;
@@ -314,15 +475,15 @@ function configBytes(config) {
   return n;
 }
 // Oxi for kintone (prototype). On the record detail screen it offers:
-//   - 帳票: <name> for each Word template registered in the plugin settings:
-//     fill its {{placeholders}} with this record (field codes or the labels
-//     shown on the form; a table row with {{subtable.field}} repeats per
-//     subtable row), show the PDF, and optionally attach it to the record;
-//   - 表示: for each attached .docx, convert it to PDF and show it.
+//   - 帳票: <name> for each Word or Excel template registered in the plugin
+//     settings: fill its {{placeholders}} with this record (field codes or
+//     the labels shown on the form; a row with {{subtable.field}} takes the
+//     subtable's rows), show the PDF, and optionally attach it to the record;
+//   - 表示 / 帳票 for each attached .docx or .xlsx, as is or filled.
 // The Oxi engine (WebAssembly) is loaded from the public npm package via
 // unpkg (jsDelivr refuses files over 50 MB); documents and record data never
 // leave the browser.
-var ENGINE = 'https://unpkg.com/@oxidocs/wasm@0.9.1/oxidocs_wasm.js';
+var ENGINE = 'https://unpkg.com/@oxidocs/wasm@0.9.3/oxidocs_wasm.js';
 if (typeof window !== 'undefined' && window.OXI_ENGINE_URL) ENGINE = window.OXI_ENGINE_URL;
 var enginePromise = null;
 var PLUGIN_ID = kintone.$PLUGIN_ID;
@@ -452,17 +613,28 @@ function show(source, record, fill, attachTo) {
     .then(function (r) {
       var api = r[0], bytes = new Uint8Array(r[1]), note = '';
       var t0 = performance.now();
+      var excel = source.kind === 'xlsx';
+      if (excel && !api.xlsx_to_pdf) throw new Error('Excel のひな形には、新しい変換エンジンが必要です。プラグインを更新してください。');
       if (fill) {
         report('帳票を作成中…');
-        var filled = fillDocx(api, bytes, withLabels(kintoneRecordData(record), r[2]));
-        bytes = filled.docx;
-        if (filled.missing.length) note = '　見つからない項目: ' + filled.missing.join('、');
+        var filled;
+        if (excel) {
+          filled = fillXlsx(api, bytes, withLabels(kintoneRecordValues(record), r[2]));
+          bytes = filled.xlsx;
+          var over = Object.keys(filled.overflow).map(function (k) { return k + ' ' + filled.overflow[k] + ' 件'; });
+          if (over.length) note += '　行が足りず入らなかった明細: ' + over.join('、');
+        } else {
+          filled = fillDocx(api, bytes, withLabels(kintoneRecordData(record), r[2]));
+          bytes = filled.docx;
+        }
+        if (filled.missing.length) note += '　見つからない項目: ' + filled.missing.join('、');
       }
       report('PDF に変換中…');
-      var title = source.name.replace(/\.docx$/i, '');
+      var title = source.name.replace(/\.(docx|xlsx)$/i, '');
       // Engines from 0.9.2 on write a PDF title, which the viewer shows in
       // place of the blob URL; older ones only have docx_to_pdf.
-      var pdf = api.docx_to_pdf_with_title ? api.docx_to_pdf_with_title(bytes, title) : api.docx_to_pdf(bytes);
+      var pdf = excel ? api.xlsx_to_pdf(bytes, title)
+        : api.docx_to_pdf_with_title ? api.docx_to_pdf_with_title(bytes, title) : api.docx_to_pdf(bytes);
       var ms = Math.round(performance.now() - t0);
       var fileName = title + (fill ? '_' + (record.$id ? record.$id.value : '') : '') + '.pdf';
       var url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }));
@@ -532,15 +704,16 @@ kintone.events.on('app.record.detail.show', function (event) {
   var config = (PLUGIN_ID && kintone.plugin.app.getConfig(PLUGIN_ID)) || {};
   var output = config.output_field && record[config.output_field] ? config.output_field : '';
   readTemplates(config).forEach(function (t) {
-    var source = { name: t.name + '.docx', load: function () { return Promise.resolve(t.bytes); } };
+    var source = { name: t.name + '.' + t.kind, kind: t.kind, load: function () { return Promise.resolve(t.bytes); } };
     holder.appendChild(button('帳票: ' + t.name, function () { show(source, record, true, output); }));
   });
   Object.keys(record).forEach(function (code) {
     var field = record[code];
     if (field.type !== 'FILE') return;
     field.value.forEach(function (file) {
-      if (!/\.docx$/i.test(file.name)) return;
-      var source = { name: file.name, load: function () { return download(file.fileKey); } };
+      var ext = (file.name.match(/\.(docx|xlsx)$/i) || [])[1];
+      if (!ext) return;
+      var source = { name: file.name, kind: ext.toLowerCase(), load: function () { return download(file.fileKey); } };
       holder.appendChild(button('表示: ' + file.name, function () { show(source, record, false, ''); }));
       holder.appendChild(button('帳票: ' + file.name, function () { show(source, record, true, output); }));
     });
