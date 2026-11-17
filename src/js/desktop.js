@@ -483,7 +483,7 @@ function configBytes(config) {
 // The Oxi engine (WebAssembly) is loaded from the public npm package via
 // unpkg (jsDelivr refuses files over 50 MB); documents and record data never
 // leave the browser.
-var ENGINE = 'https://unpkg.com/@oxidocs/wasm@0.9.3/oxidocs_wasm.js';
+var ENGINE = 'https://unpkg.com/@oxidocs/wasm@0.9.2/oxidocs_wasm.js';
 if (typeof window !== 'undefined' && window.OXI_ENGINE_URL) ENGINE = window.OXI_ENGINE_URL;
 var enginePromise = null;
 var PLUGIN_ID = kintone.$PLUGIN_ID;
