@@ -4,6 +4,14 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 ver=${1:?engine version, e.g. 0.9.0}
+# The sample templates, inlined as base64 for the settings screen's button.
+samples() {
+  printf 'var SAMPLE_TEMPLATES = ['
+  for f in 見積書.docx 納品書.docx 請求書.xlsx; do
+    printf "{ name: '%s', kind: '%s', data: '%s' }," "${f%.*}" "${f##*.}" "$(base64 -w0 "$here/samples/$f")"
+  done
+  printf '];\n'
+}
 part() { grep -v -e '^// SPDX' -e '^import ' "$1" | sed 's/^export //'; }
 {
   echo '// SPDX-License-Identifier: MIT OR Apache-2.0'
@@ -22,6 +30,7 @@ part() { grep -v -e '^// SPDX' -e '^import ' "$1" | sed 's/^export //'; }
   echo '(function () {'
   echo "'use strict';"
   part "$here/lib/config-store.js"
+  samples
   part "$here/lib/config-main.js"
   echo '})();'
 } > "$here/src/js/config.js"
