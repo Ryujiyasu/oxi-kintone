@@ -1,0 +1,9 @@
+<!doctype html><meta charset="utf-8"><title>config</title>
+<script src="kintone-mock.js"></script>
+<div id="cfg"></div>
+<script>
+fetch('config.html').then(r => r.text()).then(h => {
+  document.getElementById('cfg').innerHTML = h;
+  var s = document.createElement('script'); s.src = 'config.js'; document.body.appendChild(s);
+});
+</script>

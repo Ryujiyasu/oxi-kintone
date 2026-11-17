@@ -1,0 +1,11 @@
+*.zip
+*.ppk
+test/wasm-local/
+test/mock3/engine
+test/*.pdf
+test/*.png
+test/forms/*.pdf
+test/forms/*.docx
+test/mock3/desktop.js
+test/mock3/config.js
+test/mock3/config.html

@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><title>mock kintone</title>
+<div id="hdr"></div>
+<script>
+var handlers = {};
+var props = {
+  customer: { type: 'SINGLE_LINE_TEXT', label: '顧客名' }, date: { type: 'DATE', label: '見積日' },
+  subject: { type: 'SINGLE_LINE_TEXT', label: '件名' }, note: { type: 'MULTI_LINE_TEXT', label: '備考' },
+  total: { type: 'CALC', label: '合計' },
+  items: { type: 'SUBTABLE', label: '明細', fields: { item: { label: '品名' }, qty: { label: '数量' }, price: { label: '単価' }, amount: { label: '金額' } } }
+};
+window.kintone = {
+  events: { on: function (t, f) { handlers[t] = f; } },
+  api: Object.assign(function () { return Promise.resolve({ properties: props }); }, { url: function (p) { return p + '.json'; } }),
+  app: { getId: function () { return 1; }, record: { getHeaderMenuSpaceElement: function () { return document.getElementById('hdr'); } } }
+};
+</script>
+<script src="desktop.js"></script>
+<script>
+function row(i, item, qty, price, amount) { return { id: String(i), value: {
+  item: { type: 'SINGLE_LINE_TEXT', value: item }, qty: { type: 'NUMBER', value: qty },
+  price: { type: 'NUMBER', value: price }, amount: { type: 'CALC', value: amount } } }; }
+handlers['app.record.detail.show']({ record: {
+  customer: { type: 'SINGLE_LINE_TEXT', value: '株式会社テスト商事' }, date: { type: 'DATE', value: '2026-11-17' },
+  subject: { type: 'SINGLE_LINE_TEXT', value: '社内研修用ノートPCの導入' }, note: { type: 'MULTI_LINE_TEXT', value: '納期はご発注後2週間です。' },
+  total: { type: 'CALC', value: '1386000' },
+  items: { type: 'SUBTABLE', value: [row(1, 'ノートPC 14インチ', '10', '120000', '1200000'), row(2, '初期設定作業', '10', '8000', '80000'), row(3, '保守サポート（1年）', '1', '106000', '106000')] },
+  tmpl: { type: 'FILE', value: [{ fileKey: 'k1', name: '見積書ひな形.docx' }] } } });
+</script>

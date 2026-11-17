@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><title>detail</title>
+<script src="kintone-mock.js"></script>
+<div id="hdr"></div>
+<script src="desktop.js"></script>
+<script>
+function row(i, a, q, p, m) { return { id: String(i), value: { 品名: { type: 'SINGLE_LINE_TEXT', value: a }, 数量: { type: 'NUMBER', value: q }, 単価: { type: 'NUMBER', value: p }, 金額: { type: 'CALC', value: m } } }; }
+__handlers['app.record.detail.show']({ record: {
+  $id: { type: '__ID__', value: '7' },
+  顧客名: { type: 'SINGLE_LINE_TEXT', value: '株式会社テスト商事' }, 見積日: { type: 'DATE', value: '2026-11-17' },
+  件名: { type: 'SINGLE_LINE_TEXT', value: '社内研修用ノートPCの導入' }, 備考: { type: 'MULTI_LINE_TEXT', value: '' },
+  合計: { type: 'CALC', value: '1386000' },
+  明細: { type: 'SUBTABLE', value: [row(1, 'ノートPC 14インチ', '10', '120000', '1200000'), row(2, '初期設定作業', '10', '8000', '80000')] },
+  添付ファイル: { type: 'FILE', value: [{ fileKey: 'old-1', name: 'old.pdf' }] } } });
+</script>
