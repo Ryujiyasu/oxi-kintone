@@ -11,3 +11,5 @@ test/mock3/config.js
 test/mock3/config.html
 test/mock3/engine-x
 test/xlsx/out*
+test/mock3/engine-*
+test/mock3/fonts-*
