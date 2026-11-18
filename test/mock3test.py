@@ -28,6 +28,7 @@ with sync_playwright() as p:
     saved = pg.evaluate("window.__saved")
     print("saved keys:", sorted(saved.keys()), "templates:", saved["templates"], "output:", saved["output_field"])
     pg.add_init_script(f"window.OXI_ENGINE_URL = '{engine}';")
+    if len(sys.argv) > 5: pg.add_init_script(f"window.OXI_FONTS_URL = '{sys.argv[5]}';")
     pg.goto("http://127.0.0.1:8765/detail.html")
     print("buttons:", pg.eval_on_selector_all(".oxi-buttons button", "bs => bs.map(b => b.textContent)"))
     pg.click("text=帳票: 見積書")
